@@ -1,4 +1,6 @@
 //! Theta* algorithm.
+//! Compute a shortest path using the [Theta* search
+//! algorithm](https://en.wikipedia.org/wiki/Theta*).
 use indexmap::map::Entry::{Occupied, Vacant};
 use num_traits::Zero;
 use std::cmp::Ordering;
@@ -7,7 +9,76 @@ use std::{collections::BinaryHeap, hash::Hash};
 use super::reverse_path;
 use crate::FxIndexMap;
 
-/// Theta* algorithm.
+/// Compute a shortest path using the [Theta* search
+/// algorithm](https://en.wikipedia.org/wiki/Theta*).
+///
+/// The shortest path starting from `start` up to a node for which `success` returns `true` is
+/// computed and returned along with its total cost, in a `Some`. If no path can be found, `None`
+/// is returned instead.
+///
+/// - `start` is the starting node.
+/// - `successors` returns a list of successors for a given node, along with the cost for moving
+///   from the node to the successor. This cost must be non-negative.
+/// - `heuristic` returns an approximation of the cost from a given node to the goal. The
+///   approximation must not be greater than the real cost, or a wrong shortest path may be returned.
+/// - `success` checks whether the goal has been reached. It is not a node as some problems require
+///   a dynamic solution instead of a fixed node.
+/// - `sight` returns the cost of moving from the parent node to the successor. It is used to
+///  determine whether a node is visible from another one. If `None` is returned, the nodes are
+/// considered not visible.
+///
+/// A node will never be included twice in the path as determined by the `Eq` relationship.
+///
+/// The returned path comprises both the start and end node.
+///
+/// # Example
+///
+/// We will search the shortest path on a chess board to go from (1, 1) to (4, 6) doing only knight
+/// moves.
+///
+/// The first version uses an explicit type `Pos` on which the required traits are derived.
+///
+/// ```
+/// use pathfinding::prelude::theta_star;
+///
+/// #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// struct Pos(i32, i32);
+///
+/// impl Pos {
+///   fn distance(&self, other: &Pos) -> u32 {
+///     (self.0.abs_diff(other.0) + self.1.abs_diff(other.1)) as u32
+///   }
+///
+///   fn successors(&self) -> Vec<(Pos, u32)> {
+///     let &Pos(x, y) = self;
+///     vec![Pos(x+1,y+2), Pos(x+1,y-2), Pos(x-1,y+2), Pos(x-1,y-2),
+///          Pos(x+2,y+1), Pos(x+2,y-1), Pos(x-2,y+1), Pos(x-2,y-1)]
+///          .into_iter().map(|p| (p, 1)).collect()
+///   }
+/// }
+///
+/// static GOAL: Pos = Pos(4, 6);
+/// let result = theta_star(&Pos(1, 1), |p| p.successors(), |p| p.distance(&GOAL) / 3,
+///                    |p| *p == GOAL, |p, parent| Some(parent.distance(p)));
+/// assert_eq!(result.expect("no path found").1, 8);
+/// ```
+///
+/// The second version does not declare a `Pos` type, makes use of more closures,
+/// and is thus shorter.
+///
+/// ```
+/// use pathfinding::prelude::theta_star;
+///
+/// static GOAL: (i32, i32) = (4, 6);
+/// let result = theta_star(&(1, 1),
+///                    |&(x, y)| vec![(x+1,y+2), (x+1,y-2), (x-1,y+2), (x-1,y-2),
+///                                   (x+2,y+1), (x+2,y-1), (x-2,y+1), (x-2,y-1)]
+///                               .into_iter().map(|p| (p, 1)),
+///                    |&(x, y)| (GOAL.0.abs_diff(x) + GOAL.1.abs_diff(y)) / 3,
+///                    |&p| p == GOAL,
+///                    |&(x, y), &(px, py)| Some(x.abs_diff(px) + y.abs_diff(py)));
+/// assert_eq!(result.expect("no path found").1, 8);
+/// ```
 #[expect(clippy::missing_panics_doc)]
 pub fn theta_star<N, C, FN, IN, FH, FS, FV>(
     start: &N,
@@ -90,7 +161,7 @@ where
 }
 
 /// This structure is used to implement Rust's max-heap as a min-heap
-/// version for A*. The smallest `estimated_cost` (which is the sum of
+/// version for Theta*. The smallest `estimated_cost` (which is the sum of
 /// the `cost` and the heuristic) is preferred. For the same
 /// `estimated_cost`, the highest `cost` will be favored, as it may
 /// indicate that the goal is nearer, thereby requiring fewer
